@@ -54,27 +54,159 @@ function imageContain(doc,p,x,y,w,h) {
   const ratio = Math.min(w/p.width,h/p.height); const dw=p.width*ratio, dh=p.height*ratio;
   doc.addImage(p.data,'JPEG',x+(w-dw)/2,y+(h-dh)/2,dw,dh);
 }
+
 async function createPDF() {
-  const doc = new jsPDF({orientation:'portrait',unit:'mm',format:'a4',compress:true});
-  const W=210, H=297;
-  doc.setFillColor(17,56,104); doc.rect(0,0,W,47,'F');
-  doc.setFillColor(27,126,191); doc.rect(0,44,W,3,'F');
-  try { const logo = await readImageFromUrl('/logo-sekolah.jpg'); const p=asJpeg(logo); rounded(doc,13,8,30,30,3,[255,255,255]); imageContain(doc,p,15,10,26,26); } catch { /* keep PDF usable */ }
-  doc.setTextColor(255,255,255); doc.setFont('helvetica','bold'); doc.setFontSize(16); text(doc,'LAPORAN e-OPR PdPR',49,19);
-  doc.setFontSize(10); text(doc,'SMK(P) JALAN IPOH',49,26); doc.setFont('helvetica','normal'); doc.setFontSize(8); text(doc,'KUALA LUMPUR  |  LAPORAN SATU MUKA SURAT',49,32);
-  doc.setTextColor(17,56,104); doc.setFont('helvetica','bold'); doc.setFontSize(11); text(doc,'MAKLUMAT PELAKSANAAN',13,57);
-  const rawDate=$('tarikh'); const [yy,mm,dd]=rawDate.split('-'); const date=rawDate?`${dd}/${mm}/${yy}`:'—';
-  const vals=[['Hari',$('hari')],['Tarikh',date],['Masa',$('masa')],['Subjek',$('subjek')],['Kelas',$('kelas')],['Kehadiran',$('kehadiran')],['Tajuk PdPR',$('tajuk')]];
-  let y=62; vals.forEach(([a,b])=>{field(doc,a,b,y);y+=15;});
-  doc.setFontSize(10);doc.setFont('helvetica','bold');doc.setTextColor(17,56,104);text(doc,'PAUTAN AKTIVITI',13,174);
-  doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(34,58,88);
-  text(doc,'Google Meet:',14,181); text(doc,doc.splitTextToSize($('meet')||'Tiada pautan',158).slice(0,2),42,181);
-  text(doc,'Kuiz:',14,191);text(doc,doc.splitTextToSize($('kuiz')||'Tiada pautan',158).slice(0,2),42,191);
-  doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(17,56,104);text(doc,'DOKUMENTASI BERGAMBAR',13,205);
-  const x0=13, gap=4, iw=90, ih=33, rowY=[210,247];
-  for(let i=0;i<4;i++){const x=x0+(i%2)*(iw+gap), py=rowY[Math.floor(i/2)];doc.setFillColor(241,246,251);doc.roundedRect(x,py,iw,ih,2,2,'F');if(photos[i])imageContain(doc,photos[i],x+1,py+1,iw-2,ih-2);else{doc.setTextColor(146,161,179);doc.setFont('helvetica','normal');doc.setFontSize(9);text(doc,`Gambar ${i+1}`,x+iw/2,py+ih/2,{align:'center'});}}
-  doc.setDrawColor(209,221,234);doc.line(13,285,197,285);doc.setFontSize(7);doc.setTextColor(96,113,134);text(doc,'Dokumentasi PdPR | SMK(P) Jalan Ipoh',13,290);text(doc,'1 / 1',197,290,{align:'right'});
-  const name=[$('tarikh'),$('kelas'),$('subjek')].join('_').replace(/[^a-zA-Z0-9_-]/g,'-');doc.save(`eOPR_PdPR_${name}.pdf`);
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: 'a4',
+    compress: true
+  });
+
+  const blue = [15, 51, 94];
+  const ink = [28, 46, 70];
+  const pale = [244, 248, 253];
+
+  // Kepala laporan
+  doc.setFillColor(...blue);
+  doc.rect(0, 0, 210, 37, 'F');
+  doc.setFillColor(32, 139, 199);
+  doc.rect(0, 35, 210, 2, 'F');
+
+  doc.setFillColor(255, 255, 255);
+  doc.roundedRect(13, 5, 28, 27, 2, 2, 'F');
+
+  try {
+    const logo = await readImageFromUrl('/logo-sekolah.jpg');
+    imageContain(doc, asJpeg(logo), 14.5, 6, 25, 25);
+  } catch (err) {
+    console.warn('Logo belum tersedia', err);
+  }
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(15);
+  doc.text('LAPORAN e-OPR PdPR', 47, 14.5);
+  doc.setFontSize(10);
+  doc.text('SMK(P) JALAN IPOH', 47, 21.3);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.text(
+    'KUALA LUMPUR | LAPORAN SATU MUKA SURAT',
+    47, 27.5
+  );
+
+  function heading(label, y) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(...blue);
+    doc.text(label, 13, y);
+  }
+
+  function fieldBox(label, value, x, y, w = 89) {
+    doc.setFillColor(...pale);
+    doc.roundedRect(x, y, w, 15, 2, 2, 'F');
+
+    doc.setTextColor(30, 84, 135);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.text(label.toUpperCase(), x + 3, y + 4.5);
+
+    doc.setTextColor(...ink);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    const lines = doc.splitTextToSize(
+      String(value || '-'), w - 7
+    );
+    doc.text(lines.slice(0, 2), x + 3, y + 10);
+  }
+
+  const dateParts = $('tarikh').split('-');
+  const tarikh = dateParts.length === 3
+    ? `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`
+    : $('tarikh');
+
+  heading('MAKLUMAT PELAKSANAAN', 45);
+
+  fieldBox('Hari', $('hari'), 13, 49);
+  fieldBox('Tarikh', tarikh, 108, 49);
+  fieldBox('Masa', $('masa'), 13, 66);
+  fieldBox('Subjek', $('subjek'), 108, 66);
+  fieldBox('Kelas', $('kelas'), 13, 83);
+  fieldBox('Kehadiran', $('kehadiran'), 108, 83);
+  fieldBox('Tajuk PdPR', $('tajuk'), 13, 100, 184);
+
+  heading('PAUTAN AKTIVITI', 122);
+
+  function linkBox(label, value, y) {
+    doc.setFillColor(...pale);
+    doc.roundedRect(13, y, 184, 11, 2, 2, 'F');
+
+    doc.setTextColor(30, 84, 135);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.text(label, 17, y + 4.5);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...ink);
+    const display = value || 'Tiada pautan';
+    const lines = doc.splitTextToSize(display, 140);
+    doc.text(lines[0], 51, y + 7);
+
+    if (/^https?:\/\//i.test(value)) {
+      doc.link(51, y + 1, 142, 9, { url: value });
+    }
+  }
+
+  linkBox('Google Meet', $('meet'), 126);
+  linkBox('Link Kuiz', $('kuiz'), 139);
+
+  heading('DOKUMENTASI BERGAMBAR', 160);
+
+  const width = 90;
+  const height = 55;
+  const gap = 4;
+
+  for (let i = 0; i < 4; i++) {
+    const x = 13 + (i % 2) * (width + gap);
+    const y = 164 + Math.floor(i / 2) * 59;
+
+    doc.setFillColor(241, 246, 251);
+    doc.roundedRect(x, y, width, height, 2, 2, 'F');
+
+    if (photos[i]) {
+      imageContain(
+        doc, photos[i],
+        x + 1.5, y + 1.5,
+        width - 3, height - 3
+      );
+    } else {
+      doc.setFontSize(9);
+      doc.setTextColor(145, 160, 178);
+      doc.text(
+        `Gambar ${i + 1}`,
+        x + width / 2,
+        y + height / 2,
+        { align: 'center' }
+      );
+    }
+  }
+
+  doc.setDrawColor(210, 223, 237);
+  doc.line(13, 284, 197, 284);
+  doc.setFontSize(7);
+  doc.setTextColor(93, 111, 132);
+  doc.text(
+    'Dokumentasi PdPR | SMK(P) Jalan Ipoh',
+    13, 289
+  );
+  doc.text('1 / 1', 197, 289, { align: 'right' });
+
+  const filename = [
+    $('tarikh'), $('kelas'), $('subjek')
+  ].join('_').replace(/[^a-zA-Z0-9_-]/g, '-');
+
+  doc.save(`eOPR_PdPR_${filename}.pdf`);
 }
 function readImageFromUrl(url){return new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=reject;img.src=url;});}
 form.addEventListener('submit',async e=>{e.preventDefault();if(!form.reportValidity())return;generate.disabled=true;generate.textContent='Sedang menjana PDF...';setMessage('');try{await createPDF();setMessage('PDF berjaya dijana dan dimuat turun.');}catch(err){console.error(err);setMessage('PDF gagal dijana. Sila cuba lagi.',true);}finally{generate.disabled=false;generate.textContent='↓ Jana & Muat Turun PDF';}});
